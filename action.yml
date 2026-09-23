@@ -18,7 +18,7 @@ inputs:
     description: Comma-separated rule IDs to skip.
     default: ""
   upload-sarif:
-    description: Upload results to GitHub code scanning (needs `security-events: write`).
+    description: "Upload results to GitHub code scanning (needs `security-events: write`)."
     default: "false"
   sarif-file:
     description: Where to write the SARIF report.
@@ -32,7 +32,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: "3.12"
 
@@ -88,7 +88,7 @@ runs:
 
     - name: Upload SARIF
       if: always() && inputs.upload-sarif == 'true' && steps.scan.outputs.scanned == 'true'
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       with:
         sarif_file: ${{ inputs.sarif-file }}
         category: iamscan
