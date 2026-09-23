@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: <owner>/iam-policy-scanner@v1
+      - uses: shreyasethu/iam-policy-scanner@v1
         with:
           paths: policies
           fail-on: high
