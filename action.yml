@@ -49,6 +49,7 @@ runs:
         CHANGED_ONLY: ${{ inputs.changed-only }}
         IGNORE: ${{ inputs.ignore }}
         SARIF: ${{ inputs.sarif-file }}
+        UPLOAD_SARIF: ${{ inputs.upload-sarif }}
         EVENT: ${{ github.event_name }}
       run: |
         read -r -a roots <<< "$PATHS"
@@ -84,7 +85,10 @@ runs:
           iamscan "${args[@]}" --format text --fail-on none || true
           echo '```'
         } >> "$GITHUB_STEP_SUMMARY"
-        iamscan "${args[@]}" --format github --fail-on "$FAIL_ON"
+        # Code scanning annotates the PR from the SARIF upload; skip duplicate annotations.
+        format=github
+        [[ "$UPLOAD_SARIF" == "true" ]] && format=text
+        iamscan "${args[@]}" --format "$format" --fail-on "$FAIL_ON"
 
     - name: Upload SARIF
       if: always() && inputs.upload-sarif == 'true' && steps.scan.outputs.scanned == 'true'

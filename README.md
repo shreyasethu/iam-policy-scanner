@@ -8,12 +8,12 @@ high-risk policies.
 $ iamscan examples/policies/ci-deployer.json
 HIGH     IAM018  examples/policies/ci-deployer.json [policy-wide]
          Privesc: PassRole + Lambda: Can create a Lambda function running as a privileged role
-         and invoke it. Granted by: iam:passrole (statement 0 "PassAnyRole");
-         lambda:createfunction (statement 1 "DeployLambdas"); lambda:invokefunction (statement 1 "DeployLambdas").
+         and invoke it. Granted by: iam:PassRole (statement 0 "PassAnyRole");
+         lambda:CreateFunction (statement 1 "DeployLambdas"); lambda:InvokeFunction (statement 1 "DeployLambdas").
 HIGH     IAM007  examples/policies/ci-deployer.json:6 [statement 0 "PassAnyRole"]
          iam:PassRole without iam:PassedToService: Can pass any role to any AWS service.
 ...
-Scanned 1 policy file: 0 critical, 4 high, 1 medium, 0 low
+Scanned 1 policy file: 0 critical, 4 high, 0 medium, 0 low
 ```
 
 ## Install and run

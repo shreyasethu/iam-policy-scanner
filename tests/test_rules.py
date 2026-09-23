@@ -96,6 +96,16 @@ def test_full_admin_plus_second_statement_still_reports_combo():
     assert "IAM019" in ids
 
 
+def test_passrole_on_star_is_reported_once():
+    ids = rule_ids(allow("iam:PassRole"))
+    assert "IAM007" in ids and "IAM004" not in ids
+
+
+def test_messages_keep_action_casing():
+    [finding] = [f for f in scan(allow("s3:PutObject")) if f.rule_id == "IAM004"]
+    assert "s3:PutObject" in finding.message
+
+
 def test_conditioned_wildcard_resource_is_not_flagged():
     stmt = allow("s3:PutObject", Condition={"Bool": {"aws:SecureTransport": "true"}})
     assert "IAM004" not in rule_ids(stmt)

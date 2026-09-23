@@ -119,7 +119,7 @@ def wildcard_action(r: Rule, policy: Policy) -> Iterator[Finding]:
       "HIGH for security-sensitive services, MEDIUM otherwise.")
 def service_wildcard(r: Rule, policy: Policy) -> Iterator[Finding]:
     for s in _allows(policy):
-        services = sorted({a.split(":")[0] for a in s.actions
+        services = sorted({a.split(":")[0].lower() for a in s.actions
                            if a.endswith(":*") and not _is_full_wildcard(a)})
         if not services:
             continue
@@ -130,11 +130,12 @@ def service_wildcard(r: Rule, policy: Policy) -> Iterator[Finding]:
 
 
 def _needs_resource_scoping(pattern: str) -> bool:
+    pattern = pattern.lower()
     service, _, name = pattern.partition(":")
     if not name or name == "*" or service == "*":
         return False  # covered by IAM001-IAM003
-    if pattern in RESOURCE_STAR_REQUIRED:
-        return False
+    if pattern in RESOURCE_STAR_REQUIRED or action_matches(pattern, "iam:passrole"):
+        return False  # PassRole is covered by IAM007
     return not name.startswith(READ_ONLY_VERBS)
 
 
@@ -201,7 +202,7 @@ def public_resource_policy(r: Rule, policy: Policy) -> Iterator[Finding]:
     for s in _allows(policy):
         if not s.has_wildcard_principal:
             continue
-        if s.actions and all(a in ASSUME_ROLE_ACTIONS for a in s.actions):
+        if s.actions and all(a.lower() in ASSUME_ROLE_ACTIONS for a in s.actions):
             continue  # trust policies are IAM008's job
         if not s.condition_keys & PRINCIPAL_SCOPING_KEYS:
             actions = ", ".join(s.actions or [f"NOT {a}" for a in s.not_actions])
@@ -229,7 +230,7 @@ def _passrole_reaches(s: Statement, service: str) -> bool:
 
 def _escalation_grants(policy: Policy, action: str, passed_to: str | None) -> list[Statement]:
     statements = [s for s in policy.allowing_statements(action) if not _self_scoped(s)]
-    if action == "iam:passrole" and passed_to:
+    if action.lower() == "iam:passrole" and passed_to:
         statements = [s for s in statements if _passrole_reaches(s, passed_to)]
     return statements
 
@@ -268,44 +269,44 @@ def _p(*groups: str | tuple[str, ...], passed_to: str | None = None) -> Escalati
 
 _escalation("IAM010", Severity.CRITICAL, "Privesc: iam:CreatePolicyVersion",
             "Can publish a new default version of a managed policy with arbitrary permissions.",
-            _p("iam:createpolicyversion"))
+            _p("iam:CreatePolicyVersion"))
 _escalation("IAM011", Severity.HIGH, "Privesc: iam:SetDefaultPolicyVersion",
             "Can roll a managed policy back to an older, more permissive version.",
-            _p("iam:setdefaultpolicyversion"))
+            _p("iam:SetDefaultPolicyVersion"))
 _escalation("IAM012", Severity.CRITICAL, "Privesc: attach managed policy",
             "Can attach any managed policy (e.g. AdministratorAccess) to a user, group, or role.",
-            _p(("iam:attachuserpolicy", "iam:attachgrouppolicy", "iam:attachrolepolicy")))
+            _p(("iam:AttachUserPolicy", "iam:AttachGroupPolicy", "iam:AttachRolePolicy")))
 _escalation("IAM013", Severity.CRITICAL, "Privesc: put inline policy",
             "Can write an arbitrary inline policy onto a user, group, or role.",
-            _p(("iam:putuserpolicy", "iam:putgrouppolicy", "iam:putrolepolicy")))
+            _p(("iam:PutUserPolicy", "iam:PutGroupPolicy", "iam:PutRolePolicy")))
 _escalation("IAM014", Severity.HIGH, "Privesc: iam:CreateAccessKey",
             "Can mint access keys for other IAM users and act as them.",
-            _p("iam:createaccesskey"))
+            _p("iam:CreateAccessKey"))
 _escalation("IAM015", Severity.HIGH, "Privesc: console login profile",
             "Can set a console password for other IAM users and sign in as them.",
-            _p(("iam:createloginprofile", "iam:updateloginprofile")))
+            _p(("iam:CreateLoginProfile", "iam:UpdateLoginProfile")))
 _escalation("IAM016", Severity.HIGH, "Privesc: iam:AddUserToGroup",
             "Can add a user to any group, inheriting that group's permissions.",
-            _p("iam:addusertogroup"))
+            _p("iam:AddUserToGroup"))
 _escalation("IAM017", Severity.CRITICAL, "Privesc: rewrite role trust policy",
             "Can rewrite a role's trust policy to trust itself, then assume the role.",
-            _p("iam:updateassumerolepolicy", "sts:assumerole"))
+            _p("iam:UpdateAssumeRolePolicy", "sts:AssumeRole"))
 _escalation("IAM018", Severity.HIGH, "Privesc: PassRole + Lambda",
             "Can create a Lambda function running as a privileged role and invoke it.",
-            _p("iam:passrole", "lambda:createfunction",
-               ("lambda:invokefunction", "lambda:createeventsourcemapping"),
+            _p("iam:PassRole", "lambda:CreateFunction",
+               ("lambda:InvokeFunction", "lambda:CreateEventSourceMapping"),
                passed_to="lambda.amazonaws.com"))
 _escalation("IAM019", Severity.HIGH, "Privesc: PassRole + EC2",
             "Can launch an EC2 instance with a privileged instance profile and use its credentials.",
-            _p("iam:passrole", "ec2:runinstances", passed_to="ec2.amazonaws.com"))
+            _p("iam:PassRole", "ec2:RunInstances", passed_to="ec2.amazonaws.com"))
 _escalation("IAM020", Severity.HIGH, "Privesc: PassRole + CloudFormation",
             "Can deploy a CloudFormation stack that runs as a privileged role.",
-            _p("iam:passrole", "cloudformation:createstack",
+            _p("iam:PassRole", "cloudformation:CreateStack",
                passed_to="cloudformation.amazonaws.com"))
 _escalation("IAM021", Severity.HIGH, "Privesc: Glue dev endpoint",
             "Can create or take over a Glue dev endpoint running as a privileged role.",
-            _p("iam:passrole", "glue:createdevendpoint", passed_to="glue.amazonaws.com"),
-            _p("glue:updatedevendpoint"))
+            _p("iam:PassRole", "glue:CreateDevEndpoint", passed_to="glue.amazonaws.com"),
+            _p("glue:UpdateDevEndpoint"))
 _escalation("IAM022", Severity.HIGH, "Privesc: lambda:UpdateFunctionCode",
             "Can replace the code of an existing Lambda function and run as its role.",
-            _p("lambda:updatefunctioncode"))
+            _p("lambda:UpdateFunctionCode"))
