@@ -10,7 +10,8 @@ def test_single_statement_object_and_string_action():
     policy = parse_policy({"Statement": {"Effect": "Allow", "Action": "S3:GetObject",
                                          "Resource": "arn:aws:s3:::b/*"}})
     [stmt] = policy.statements
-    assert stmt.actions == ["s3:getobject"]
+    assert stmt.actions == ["S3:GetObject"]  # kept as written for messages
+    assert stmt.grants("s3:getobject")
     assert stmt.resources == ["arn:aws:s3:::b/*"]
 
 
