@@ -1,0 +1,21 @@
+# Blocks pull requests that add or modify high-risk IAM policies under policies/.
+name: IAM policy scan
+
+on:
+  pull_request:
+    paths: ["policies/**.json"]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  iamscan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./  # in other repos: uses: <owner>/iam-policy-scanner@v1
+        with:
+          paths: policies
+          fail-on: high
+          upload-sarif: "true"

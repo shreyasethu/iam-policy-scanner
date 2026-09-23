@@ -1,0 +1,94 @@
+name: iamscan
+description: Scan AWS IAM policies for over-broad permissions and privilege-escalation paths; fail PRs that introduce high-risk policies.
+branding:
+  icon: shield
+  color: red
+
+inputs:
+  paths:
+    description: Space-separated files or directories to scan. With changed-only, only changed files under these paths are scanned.
+    default: "."
+  fail-on:
+    description: Fail the step on findings at or above this severity (low, medium, high, critical, none).
+    default: high
+  changed-only:
+    description: On pull requests, scan only JSON files the PR adds or modifies.
+    default: "true"
+  ignore:
+    description: Comma-separated rule IDs to skip.
+    default: ""
+  upload-sarif:
+    description: Upload results to GitHub code scanning (needs `security-events: write`).
+    default: "false"
+  sarif-file:
+    description: Where to write the SARIF report.
+    default: iamscan.sarif
+
+outputs:
+  sarif-file:
+    description: Path of the SARIF report.
+    value: ${{ inputs.sarif-file }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install iamscan
+      shell: bash
+      run: pip install --quiet "$GITHUB_ACTION_PATH"
+
+    - name: Scan IAM policies
+      id: scan
+      shell: bash
+      env:
+        PATHS: ${{ inputs.paths }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        CHANGED_ONLY: ${{ inputs.changed-only }}
+        IGNORE: ${{ inputs.ignore }}
+        SARIF: ${{ inputs.sarif-file }}
+        EVENT: ${{ github.event_name }}
+      run: |
+        read -r -a roots <<< "$PATHS"
+        targets=()
+        if [[ "$EVENT" == pull_request* && "$CHANGED_ONLY" == "true" ]]; then
+          # The PR checkout is a merge commit; its first parent is the base branch tip.
+          base=$(git cat-file -p HEAD | awk '/^parent/ {print $2; exit}')
+          git fetch --quiet --no-tags --depth=1 origin "$base"
+          while IFS= read -r file; do
+            for root in "${roots[@]}"; do
+              root="${root%/}"
+              if [[ "$root" == "." || "$file" == "$root" || "$file" == "$root"/* ]]; then
+                targets+=("$file"); break
+              fi
+            done
+          done < <(git diff --name-only --diff-filter=ACMR "$base" HEAD -- '*.json')
+        else
+          targets=("${roots[@]}")
+        fi
+
+        if [[ ${#targets[@]} -eq 0 ]]; then
+          echo "No changed IAM policy files to scan." | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "scanned=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        echo "scanned=true" >> "$GITHUB_OUTPUT"
+
+        args=("${targets[@]}" --ignore "$IGNORE")
+        iamscan "${args[@]}" --format sarif --output "$SARIF" --fail-on none || true
+        {
+          echo "## iamscan"
+          echo '```'
+          iamscan "${args[@]}" --format text --fail-on none || true
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+        iamscan "${args[@]}" --format github --fail-on "$FAIL_ON"
+
+    - name: Upload SARIF
+      if: always() && inputs.upload-sarif == 'true' && steps.scan.outputs.scanned == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.sarif-file }}
+        category: iamscan

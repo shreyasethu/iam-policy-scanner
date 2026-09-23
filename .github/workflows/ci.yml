@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e '.[dev]'
+      - run: pytest --cov=iamscan --cov-report=term-missing --cov-fail-under=95
+
+  action-self-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clean policy passes
+        uses: ./
+        with:
+          paths: examples/policies/least-privilege.json
+          changed-only: "false"
+
+      - name: Risky policies fail
+        id: risky
+        continue-on-error: true
+        uses: ./
+        with:
+          paths: examples/policies
+          changed-only: "false"
+          sarif-file: risky.sarif
+
+      - name: Assert the risky scan failed
+        if: steps.risky.outcome != 'failure'
+        run: |
+          echo "Expected iamscan to fail on examples/policies"
+          exit 1
