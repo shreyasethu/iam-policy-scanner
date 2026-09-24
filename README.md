@@ -4,6 +4,8 @@ Static analyzer for AWS IAM policies. Finds over-broad permissions, missing cond
 privilege-escalation paths, ranks them by severity, and blocks pull requests that introduce
 high-risk policies.
 
+![iamscan blocking a pull request: a privilege-escalation finding annotated inline on the policy diff](docs/pr-annotation.png)
+
 ```
 $ iamscan examples/policies/ci-deployer.json
 HIGH     IAM018  examples/policies/ci-deployer.json [policy-wide]
